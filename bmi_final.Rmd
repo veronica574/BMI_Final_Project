@@ -2,13 +2,33 @@
 title: "bmi_final"
 author: "Qianshu Wang"
 date: "2017/12/9"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(knitr)
+library(DT)
+library(xtable)
+library(readr)
 library(tidyverse)
+library(haven)
 library(readxl)
+library(janitor)
+library(pander)
+library(Hmisc)
+library(multcomp)
+library(ggplot2)
+library(gridExtra)
+library(reshape2)
+library(faraway)
+library(leaps)
+library(HH)
+library(broom)
+library(olsrr)
 ```
 
 
@@ -30,14 +50,45 @@ GHP = GHP %>%
          MEWS = if_else(MEWS > 5, 3, MEWS)) # 0 = normal, 1 = increase caution, 2 = further deterioration, 3 = immediate action required
 GHP = GHP %>%
   group_by(PatientID) %>%
-  filter(date == min(date))
+  filter(date == min(date)) %>%
+  clean_names()
 
-write.csv(GHP, "GHP.csv")
+#write.csv(GHP, "GHP.csv")
 ```
 
 From the plot we know that LOSDays2 is the same as LOSHour
 ```{r}
-plot(GHP$LOSHours, GHP$LOSDays2)
+#plot(GHP$LOSHours, GHP$LOSDays2)
+
+# fit all predictor:
+mult.reg = lm(losdays2 ~ mews + is30dayreadmit + cindex + evisit + ageyear + gender + race + religion + maritalstatus + insurancetype, data = GHP)
+  summary(mult.reg)
+  
+# stepwise <- step(mult.reg, direction = 'both')
+# summary(stepwise)
+
+#criterion-based variable selection
+best <- function(model, ...) 
+{
+  subsets <- regsubsets(formula(model), model.frame(model), ...)
+  subsets <- with(summary(subsets),
+                  cbind(p = as.numeric(rownames(which)), which, rss, rsq, adjr2, cp, bic))
+  
+  return(subsets)
+}  
+
+best_subsets = best(mult.reg, nbest = 1)
+pander(best_subsets)
+
+#the selected model
+best_mult=lm(losdays2 ~ mews + is30dayreadmit + cindex + evisit + ageyear + gender + insurancetype, data = GHP)
+  summary(best_mult)
+  
+#check collinearity
+pander(vif(best_mult))
+
+#pair-wise scatterplot, also to check collinarity
+pairs(~ mews + is30dayreadmit + cindex + evisit + ageyear, data = GHP)
 ```
 
 
