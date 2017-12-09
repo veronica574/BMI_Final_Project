@@ -1,0 +1,20 @@
+{
+    "collab_server" : "",
+    "contents" : "---\ntitle: \"bmi_final\"\nauthor: \"Qianshu Wang\"\ndate: \"2017/12/9\"\noutput: html_document\n---\n\n```{r setup, include=FALSE}\nknitr::opts_chunk$set(echo = TRUE)\nlibrary(tidyverse)\nlibrary(readxl)\n```\n\n\nClean Data\n```{r}\nGHP = read_excel(\"./GHProject_Dataset.xlsx\") %>%\n  filter(ICU_Flag != 1)\n\nGHP = GHP %>%\n  separate(AdmitDtm, into = c(\"weekday\", \"date\", \"year\"), sep = \",\") %>% \n  select(-year) %>%\n  mutate(date = paste(date, \" 2016\"), date = as.Date(date, format = \" %B %d %Y\")) %>%\n  mutate(Cindex = if_else(Cindex == 1 & Cindex ==2, 1, Cindex), \n         Cindex = if_else(Cindex == 3 & Cindex == 4, 2, Cindex), \n         Cindex = if_else(Cindex >= 5, 3, Cindex)) %>% # 0 = normal, 1 = mild, 2 = moderate, 3 = severe\n  mutate(MEWS = if_else(MEWS == 1, 0, MEWS), \n         MEWS = if_else((MEWS == 2) + (MEWS == 3) == 1, 1, MEWS), \n         MEWS = if_else((MEWS == 4) + (MEWS == 5) == 1, 2, MEWS), \n         MEWS = if_else(MEWS > 5, 3, MEWS)) # 0 = normal, 1 = increase caution, 2 = further deterioration, 3 = immediate action required\nGHP = GHP %>%\n  group_by(PatientID) %>%\n  filter(date == min(date))\n\nwrite.csv(GHP, \"GHP.csv\")\n```\n\nFrom the plot we know that LOSDays2 is the same as LOSHour\n```{r}\nplot(GHP$LOSHours, GHP$LOSDays2)\n```\n\n\n",
+    "created" : 1512828960890.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1896167935",
+    "id" : "DDFD6667",
+    "lastKnownWriteTime" : 1512836273,
+    "last_content_update" : 1512836273799,
+    "path" : "~/Documents/CU/8130/Final Project/bmi_final.Rmd",
+    "project_path" : "bmi_final.Rmd",
+    "properties" : {
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

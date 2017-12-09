@@ -1,0 +1,43 @@
+---
+title: "bmi_final"
+author: "Qianshu Wang"
+date: "2017/12/9"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(readxl)
+```
+
+
+Clean Data
+```{r}
+GHP = read_excel("./GHProject_Dataset.xlsx") %>%
+  filter(ICU_Flag != 1)
+
+GHP = GHP %>%
+  separate(AdmitDtm, into = c("weekday", "date", "year"), sep = ",") %>% 
+  select(-year) %>%
+  mutate(date = paste(date, " 2016"), date = as.Date(date, format = " %B %d %Y")) %>%
+  mutate(Cindex = if_else(Cindex == 1 & Cindex ==2, 1, Cindex), 
+         Cindex = if_else(Cindex == 3 & Cindex == 4, 2, Cindex), 
+         Cindex = if_else(Cindex >= 5, 3, Cindex)) %>% # 0 = normal, 1 = mild, 2 = moderate, 3 = severe
+  mutate(MEWS = if_else(MEWS == 1, 0, MEWS), 
+         MEWS = if_else((MEWS == 2) + (MEWS == 3) == 1, 1, MEWS), 
+         MEWS = if_else((MEWS == 4) + (MEWS == 5) == 1, 2, MEWS), 
+         MEWS = if_else(MEWS > 5, 3, MEWS)) # 0 = normal, 1 = increase caution, 2 = further deterioration, 3 = immediate action required
+GHP = GHP %>%
+  group_by(PatientID) %>%
+  filter(date == min(date))
+
+write.csv(GHP, "GHP.csv")
+```
+
+From the plot we know that LOSDays2 is the same as LOSHour
+```{r}
+plot(GHP$LOSHours, GHP$LOSDays2)
+```
+
+
