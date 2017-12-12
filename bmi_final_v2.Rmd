@@ -10,7 +10,6 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
-library(knitr)
 library(DT)
 library(xtable)
 library(readr)
@@ -21,8 +20,6 @@ library(janitor)
 library(pander)
 library(Hmisc)
 library(multcomp)
-library(ggplot2)
-library(gridExtra)
 library(reshape2)
 library(faraway)
 library(leaps)
@@ -97,9 +94,6 @@ GHP_missing_to_median = map_df(GHP, replace_na_w_median)
 ```
 
 
-
-
-
 fit with mews
 
 pair-wise scatterplot, also to check collinarity
@@ -127,17 +121,17 @@ The full model is
 mult.reg = lm(log_losdays2 ~ log_bmi +  o2sat + heartrate + bpsystolic + bpdiastolic + respirationrate + temperature + is30dayreadmit + cindex + evisit + ageyear + gender + race + religion + maritalstatus + insurancetype, data = GHP_missing_to_median)
   summary(mult.reg)
 ```
+
 ```{r}
 stepwise <- step(mult.reg, direction = 'both')
 summary(stepwise)
 ```
 
-
 criterion-based variable selection 
 ```{r}
 best <- function(model, ...) 
 {
-  subsets <- regsubsets(formula(model), model.frame(model), nvmax = 20, ...)
+  subsets <- regsubsets(formula(model), model.frame(model), nvmax = 40, ...)
   subsets <- with(summary(subsets),
                   cbind(p = as.numeric(rownames(which)), which, rss, rsq, adjr2, cp, bic))
   
@@ -150,7 +144,7 @@ pander(best_subsets)
 
 the selected model
 ```{r}
-best_mult=lm(log_losdays2 ~ mews + is30dayreadmit + cindex + evisit + ageyear + gender + insurancetype + religion + maritalstatus, data = GHP)
+best_mult = lm(log_losdays2 ~ mews + is30dayreadmit + cindex + evisit + ageyear + gender + insurancetype + religion + maritalstatus, data = GHP)
   summary(best_mult)
 ```
 
@@ -159,9 +153,35 @@ best_mult=lm(log_losdays2 ~ mews + is30dayreadmit + cindex + evisit + ageyear + 
 pander(vif(best_mult))
 ```
 
+```{r}
+best_mult = lm(log_losdays2 ~ log(bmi) + is30dayreadmit + cindex + evisit + ageyear + gender + insurancetype + bpdiastolic + bpsystolic + heartrate +respirationrate+temperature, data = GHP_missing_to_median)
+  summary(best_mult)
+  
+par(mfrow = c(2, 2))
+plot(best_mult)
 
+stu_res<-rstandard(best_mult)
+outliers_y<-stu_res[abs(stu_res)>2.5]
+outliers_y
 
+as.data.frame(influence.measures(best_mult_1))
 
+inf = influence.measures(best_mult)
+which(apply(inf$is.inf, 1, any))
 
+ghp_remove <- GHP_missing_to_median[c(-6,-237,-285,-333,-378,-421,-526,-547,-620,-646,-726,-775,-794,-844,-858,-873,-884,-902,-1011,-1147,-1268,-1372,-1427,-1505,-1524,-1551,-1588,-1643,-1678,-1738,-1921,-1929,-2037,-2107,-2190,-2443,-2508,-2576,-2603,-2821,-2837,-2878,-2902,-2935,-2976,-3136,-3154,-3155,-3167,-3182,-3229,-3281,-3357,-3358,-3378,-3389,-3392,-3414,-3462),]
+
+best_mult_1 = lm(log_losdays2 ~ log(bmi) + is30dayreadmit + cindex + evisit + ageyear + gender + insurancetype + bpdiastolic + bpsystolic + heartrate +respirationrate+temperature, data = ghp_remove)
+  summary(best_mult_1)
+  
+inf_1 = influence.measures(best_mult_1)
+which(apply(inf_1$is.inf, 1, any))
+summary(inf)
+  
+ghp_outlier = GHP_missing_to_median[c(6,237,285,333,378,421,526,547,620,646,726,775,794,844,858,873,884,902,1011,1147,1268,1372,1427,1505,1524,1551,1588,1643,1678,1738,1921,1929,2037,2107,2190,2443,2508,2576,2603,2821,2837,2878,2902,2935,2976,3136,3154,3155,3167,3182,3229,3281,3357,3358,3378,3389,3392,3414,3462),]
+
+best_mult_2 = lm(log_losdays2 ~ log(bmi) + is30dayreadmit + cindex + evisit + ageyear + gender + insurancetype + bpdiastolic + bpsystolic + heartrate +respirationrate+temperature, data = ghp_outlier)
+  summary(best_mult_2)
+```
 
 
