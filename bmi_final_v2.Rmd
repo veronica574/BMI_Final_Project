@@ -1,0 +1,167 @@
+---
+title: "bmi_final"
+author: "Qianshu Wang"
+date: "2017/12/9"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(knitr)
+library(DT)
+library(xtable)
+library(readr)
+library(tidyverse)
+library(haven)
+library(readxl)
+library(janitor)
+library(pander)
+library(Hmisc)
+library(multcomp)
+library(ggplot2)
+library(gridExtra)
+library(reshape2)
+library(faraway)
+library(leaps)
+library(HH)
+library(broom)
+library(olsrr)
+```
+
+
+Clean Data
+```{r}
+GHP = read_excel("./GHProject_Dataset.xlsx") %>%
+  filter(ICU_Flag != 1)
+
+GHP = GHP %>%
+  separate(AdmitDtm, into = c("weekday", "date", "year"), sep = ",") %>% 
+  mutate(date = paste(date, " 2016"), date = as.Date(date, format = " %B %d %Y")) %>%
+  mutate(Cindex = if_else(Cindex == 1 & Cindex ==2, 1, Cindex), 
+         Cindex = if_else(Cindex == 3 & Cindex == 4, 2, Cindex), 
+         Cindex = if_else(Cindex >= 5, 3, Cindex)) %>% # 0 = normal, 1 = mild, 2 = moderate, 3 = severe
+  mutate(MEWS = if_else(MEWS == 1, 0, MEWS), 
+         MEWS = if_else((MEWS == 2) + (MEWS == 3) == 1, 1, MEWS), 
+         MEWS = if_else((MEWS == 4) + (MEWS == 5) == 1, 2, MEWS), 
+         MEWS = if_else(MEWS > 5, 3, MEWS)) # 0 = normal, 1 = increase caution, 2 = further deterioration, 3 = immediate action required
+GHP = GHP %>%
+  group_by(PatientID) %>%
+  filter(date == min(date)) %>%
+  clean_names() %>%
+  mutate(log_losdays2 = log(losdays2), log_o2sat = log(o2sat), log_resp = log(respirationrate), squre_resp = (respirationrate)^2,  log_bmi = log(bmi), squre_o2sat = (o2sat)^2, log_heart = log(heartrate))
+
+#write.csv(GHP, "GHP.csv")
+```
+
+deal with missing values
+```{r na value}
+attach(GHP)
+boxplot(bpsystolic)
+boxplot(o2sat)
+boxplot(temperature)
+boxplot(heartrate)
+boxplot(respirationrate)
+boxplot(bpdiastolic)
+boxplot(bmi)
+boxplot(ageyear)
+boxplot(cindex)
+
+histogram(bpsystolic)
+histogram(o2sat)
+histogram(temperature)
+histogram(heartrate)
+histogram(respirationrate)
+histogram(bpdiastolic)
+histogram(bmi)
+histogram(ageyear)
+histogram(cindex)
+histogram(log_bmi) #bmi should be log
+
+```
+
+replace na with median
+```{r}
+replace_na_w_median = function(vector){
+  if (is.numeric(vector)) {
+    vector[is.na(vector)] = median(vector, na.rm = TRUE)
+  } else if (is.character(vector)) {
+    vector[is.na(vector)] = "unknown"
+  }
+  return(vector)
+}
+
+GHP_missing_to_median = map_df(GHP, replace_na_w_median)
+```
+
+
+
+
+
+fit with mews
+
+pair-wise scatterplot, also to check collinarity
+```{r}
+#pairs(~ log_losdays2  + bpsystolic + bpdiastolic + temperature + log_heart + log_o2sat + lbmi + log_resp + is30dayreadmit + cindex + evisit + ageyear, data = GHP)
+```
+
+anova tests for categorical data
+```{r}
+# attach(GHP)
+# slr_gender = lm(log_losdays2 ~ gender)
+# slr_maritalstatus = lm(log_losdays2 ~ maritalstatus)
+# slr_insurancetype = lm(log_losdays2 ~ insurancetype)
+# slr_religion = lm(log_losdays2 ~ religion)
+# anova(slr_gender)
+# anova(slr_maritalstatus)
+# anova(slr_insurancetype)
+# anova(slr_religion)
+```
+
+
+The full model is
+```{r full model}
+# fit all predictor:
+mult.reg = lm(log_losdays2 ~ log_bmi +  o2sat + heartrate + bpsystolic + bpdiastolic + respirationrate + temperature + is30dayreadmit + cindex + evisit + ageyear + gender + race + religion + maritalstatus + insurancetype, data = GHP_missing_to_median)
+  summary(mult.reg)
+```
+```{r}
+stepwise <- step(mult.reg, direction = 'both')
+summary(stepwise)
+```
+
+
+criterion-based variable selection 
+```{r}
+best <- function(model, ...) 
+{
+  subsets <- regsubsets(formula(model), model.frame(model), nvmax = 20, ...)
+  subsets <- with(summary(subsets),
+                  cbind(p = as.numeric(rownames(which)), which, rss, rsq, adjr2, cp, bic))
+  
+  return(subsets)
+}  
+
+best_subsets = best(mult.reg, nbest = 1)
+pander(best_subsets)
+```
+
+the selected model
+```{r}
+best_mult=lm(log_losdays2 ~ mews + is30dayreadmit + cindex + evisit + ageyear + gender + insurancetype + religion + maritalstatus, data = GHP)
+  summary(best_mult)
+```
+
+#check collinearity
+```{r}
+pander(vif(best_mult))
+```
+
+
+
+
+
+
+
