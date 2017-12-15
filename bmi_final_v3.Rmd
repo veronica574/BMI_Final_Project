@@ -8,7 +8,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
 library(dplyr)
 library(DT)
 library(xtable)
@@ -34,27 +34,28 @@ library(olsrr)
 Outcome: length of stay (losdays2 or loshour)
 
 ### 1. Clean Data
+#####1. read data
 ```{r read_data}
 GHP_raw = read_excel("./GHProject_Dataset.xlsx") %>%
   clean_names() 
 ```
 
-#####1. We may not need to remove ICU_flagged obs.
+We do not need to remove icu_flag
 ```{r clean ICU_Flag}
 #histogram
-# GHP_raw %>%
-#   ggplot(aes(x = losdays2, color = icu_flag)) +
-#     geom_bar(data = GHP_raw %>% filter(icu_flag == 0), aes(x = losdays2)) +
-#     geom_bar(data = GHP_raw %>% filter(icu_flag == 1), aes(x = losdays2)) +
-#     theme_bw()
-#     
-# GHP_raw %>%
-#   ggplot(aes(y = losdays2, x = icu_flag, group = icu_flag)) +
-#     geom_boxplot()
+GHP_raw %>%
+  ggplot(aes(x = losdays2, color = icu_flag)) +
+    geom_bar(data = GHP_raw %>% filter(icu_flag == 0), aes(x = losdays2)) +
+    geom_bar(data = GHP_raw %>% filter(icu_flag == 1), aes(x = losdays2)) +
+    theme_bw()
 
-# 
-# GHP = GHP_raw %>%
-#   filter(ICU_Flag != 1)
+GHP_raw %>%
+  ggplot(aes(y = losdays2, x = icu_flag, group = icu_flag)) +
+    geom_boxplot()
+
+
+GHP = GHP_raw %>%
+  filter(ICU_Flag != 1)
 ```
 
 #####2. change admitdtm into date formate, relevel cindex and mews based on project instruction, and keep the the first visit for each patient (70 observations were removed)
@@ -78,10 +79,7 @@ GHP = GHP_raw %>%
 #####3. We wanted to investigate the relationship between the length of stay and the health/socioeconomics status of patients, so we decided the variables of intrest to exclude "postalcode", "facilityzip", "facilityname", "date", "weekday", "patientid", and "visitid". Because we also noticed that "loshours" and "losday2" are in fact the same variable with different unit, we chose to only use the "loshours". (why we choose vital signs over mews?)
 ```{r choose relavent variables}
 GHP = GHP %>%
-  dplyr::select(-postalcode, -facilityzip, -facilityname, -date, -weekday, -mews, -patientid, -visitid, -losdays2) #%>%
-  #mutate(is30dayreadmit = as.factor(is30dayreadmit), icu_flag = as.factor(icu_flag), gender = as.factor(gender), race = as.factor(race), religion = as.factor(religion), maritalstatus = as.factor(maritalstatus), insurancetype = as.factor(insurancetype)) 
-  
-  # mutate(log_losdays2 = log(losdays2), log_o2sat = log(o2sat), log_resp = log(respirationrate), squre_resp = (respirationrate)^2,  log_bmi = log(bmi), squre_o2sat = (o2sat)^2, log_heart = log(heartrate))
+  dplyr::select(-postalcode, -facilityzip, -facilityname, -date, -weekday, -mews, -patientid, -visitid, -losdays2) 
 ```
 
 #####4. Missing values were replaced with the median of that variable for numeric data. We choose median over mean to address potential skewness in variables.
@@ -97,8 +95,6 @@ replace_na_w_median = function(vector){
 
 GHP_missing_to_median = map_df(GHP, replace_na_w_median)
 ```
-
-
 
 ### 2. Exploratory analysis
 
@@ -117,69 +113,31 @@ GHP_missing_to_median = GHP_missing_to_median %>%
   mutate(log_los = log(loshours)) %>%
   dplyr::select(-loshours)
 ```
-The boxplot suggests 51 outliers in outcome, and they were removed. 
-```{r}
-# attach(GHP_missing_to_median)
-# lowerbound = quantile(log_los, probs = 0.25) - 1.5 * IQR(log_los)
-# upperbound = quantile(log_los, probs = 0.75) + 1.5 * IQR(log_los)
-# GHP_missing_to_median = GHP_missing_to_median %>%
-#   filter(log_los < upperbound, log_los > lowerbound)
-# boxplot(log_los)
-# histogram(log_los)
-```
 
 #####2. We use "ggpairs" to investigate the distribution of each variable and check whether they have potential association. (this may goes to the appendix)
 ```{r ggpairs, message=FALSE, warning=FALSE, fig.height=30, fig.width= 30}
-#ggpairs(GHP_missing_to_median) + ggplot2::theme_bw()
-# attach(GHP)
-# boxplot(bpsystolic)
-# boxplot(bpdiastolic)
-# boxplot(o2sat)
-# boxplot(temperature)
-# boxplot(heartrate)
-# boxplot(respirationrate)
-# boxplot(bmi)
-# boxplot(ageyear)
-# boxplot(cindex)
-# # 
-# histogram(bpsystolic)
-# histogram(bpdiastolic)
-# histogram(o2sat)
-# histogram(temperature)
-# histogram(heartrate)
-# histogram(respirationrate)
-# histogram(bmi)
-# histogram(ageyear)
-# histogram(cindex)
-# histogram(evisit)
-# histogram(icu_flag)
-# ggplot(data = GHP_missing_to_median, aes(x = religion)) + geom_bar()
-# ggplot(data = GHP_missing_to_median, aes(x = maritalstatus)) + geom_bar()
-# ggplot(data = GHP_missing_to_median, aes(x = race)) + geom_bar()
-# ggplot(data = GHP_missing_to_median, aes(x = insurancetype)) + geom_bar()
-# ggplot(data = GHP_missing_to_median, aes(x = gender)) + geom_bar()
+ggpairs(GHP_missing_to_median) + ggplot2::theme_bw()
 ```
-
 
 ### 3. model building
 
 anova tests for categorical data: all categorical variable shows significant difference among their levels, except gender. However, I still include gender in the full model, because ref...?.
 ```{r anova for each categorical data}
-# slr_gender = lm(log_los ~ gender, data = GHP_missing_to_median)
-# slr_maritalstatus = lm(log_los ~ maritalstatus, data = GHP_missing_to_median)
-# slr_insurancetype = lm(log_los ~ insurancetype, data = GHP_missing_to_median)
-# slr_religion = lm(log_los ~ religion, data = GHP_missing_to_median)
-# anova(slr_gender)
-# anova(slr_maritalstatus)
-# anova(slr_insurancetype)
-# anova(slr_religion)
+slr_gender = lm(log_los ~ gender, data = GHP_missing_to_median)
+slr_maritalstatus = lm(log_los ~ maritalstatus, data = GHP_missing_to_median)
+slr_insurancetype = lm(log_los ~ insurancetype, data = GHP_missing_to_median)
+slr_religion = lm(log_los ~ religion, data = GHP_missing_to_median)
+anova(slr_gender)
+anova(slr_maritalstatus)
+anova(slr_insurancetype)
+anova(slr_religion)
 ```
 
 what is the boxplot of marital status
 ```{r}
-# GHP_missing_to_median %>%
-#   ggplot(aes(x = maritalstatus, y = log_los)) +
-#     geom_boxplot()
+GHP_missing_to_median %>%
+  ggplot(aes(x = maritalstatus, y = log_los)) +
+    geom_boxplot()
 ```
 We noticed that there is only one civial union, so we decided to combine this observation into married
 ```{r}
@@ -187,16 +145,13 @@ GHP_missing_to_median = GHP_missing_to_median %>%
   mutate(maritalstatus = if_else(maritalstatus == "Civil Union", "Married", maritalstatus))
 ```
 
-
-
-
 ##### 1. The full model is
 ```{r full model}
 # fit all predictor:
 mult.reg = lm(log_los ~ bmi + o2sat + heartrate + bpsystolic + bpdiastolic + respirationrate + temperature + is30dayreadmit + cindex + evisit + ageyear + gender + race + religion + maritalstatus + insurancetype, data = GHP_missing_to_median)
   summary(mult.reg)
 ```
-##### 2. Auto
+##### 2. Automatic procedure to select varialbles
 1. stepwise
 ```{r}
 stepwise <- step(mult.reg, direction = 'both')
@@ -213,25 +168,14 @@ bwd <- step(mult.reg, direction = 'backward')
 summary(bwd)
 ```
 
-```{r}
-# auto_reduce1 <- update(stepwise, . ~ . -maritalstatus)
-# summary(auto_reduce1)
-```
-
-```{r}
-# auto_reduce2 <- update(auto_reduce1, . ~ . -o2sat)
-# summary(auto_reduce2)
-```
-6. reduced model, without o2sat
+4. reduced model, without o2sat
 ```{r}
 auto_reduce3 <- update(stepwise, . ~ . -o2sat)
 summary(auto_reduce3)
 ```
 
-7. Anova test for nested models
+5. Anova test for nested models
 ```{r}
-# anova(auto_reduce1, stepwise)
-# anova(auto_reduce2, stepwise)
 anova(auto_reduce3, stepwise) # show this
 ```
 
@@ -321,18 +265,8 @@ summary(final_model)
 write_csv(broom::tidy(final_model), "model estimate.csv")
 ```
 
-##### 5. check interaction
-```{r}
-# final_model_interaction = lm(log_los ~ heartrate * bpsystolic * bpdiastolic * respirationrate * temperature * is30dayreadmit * cindex * evisit * ageyear * gender * maritalstatus * insurancetype, data = GHP_missing_to_median)
-# summary(final_model_interaction)
-```
-
-
-
-
-
 ### 4. Model diagnostic and remedie
-#####1. check collinearity NO significant collinearity, using the VIF cut-off at 10
+#####1. check collinearity using the VIF cut-off at 10
 ```{r}
 pander(vif(final_model))
 ```
@@ -351,7 +285,6 @@ outliers_y<-stu_res[abs(stu_res)>2.5]
 outliers_y
 
 #remove outliers
-#rm_list_outlier = as.numeric(names(outliers_y))
 rm_list_outlier = c(65, 75)
 wholelist = 1:nrow(GHP_missing_to_median)
 keep_list_outlier <- wholelist[!wholelist %in% rm_list_outlier]
@@ -363,14 +296,9 @@ GHP_missing_to_median_clean = GHP_missing_to_median[keep_list_outlier, ]
 
 #####4. detect and remove influential points and leverage points
 ```{r}
-#as.data.frame(influence.measures(final_model))
-
 inf = influence.measures(final_model)
-#which(apply(inf$is.inf, 1, any))
-#summary(inf)
 
 #remove outliers
-#rm_list_influential = unique(which(apply(inf$is.inf, 1, any)))
 rm_list_influential = c(47, 54, 75, 55, 65, 51, 66, 46, 60, 53)
 wholelist_influential = 1:nrow(GHP_missing_to_median_clean)
 keep_list_influential <- wholelist_influential[!wholelist_influential %in% rm_list_influential]
@@ -379,20 +307,8 @@ GHP_influential=GHP_missing_to_median[rm_list_influential, ]
 GHP_missing_to_median_clean = GHP_missing_to_median_clean[keep_list_influential, ]
 ```
 
-#####5. 
-Fit the final model without outliers, influential points, and leverage points
-```{r}
-final_model_clean = lm(log_los ~ heartrate + bpsystolic + bpdiastolic + respirationrate + temperature + is30dayreadmit + cindex + evisit + ageyear + gender + insurancetype, data = GHP_missing_to_median_clean)
-summary(final_model_clean)
-write_csv(broom::tidy(summary(final_model_clean)), "clean model estimate.csv")
-```
-
-The diagnostic of this model
-```{r}
-par(mfrow = c(2, 2))
-plot(final_model_clean)
-```
-fit a new model with new data
+###5. Build the final model without outliers, influential points, and leverage points
+Fit a full model without outliers, influential points, and leverage points
 ```{r}
 mult.reg_1 = lm(log_los ~ bmi + o2sat + heartrate + bpsystolic + bpdiastolic + respirationrate + temperature + is30dayreadmit + cindex + evisit + ageyear + gender + race + religion + maritalstatus + insurancetype, data = GHP_missing_to_median_clean)
   summary(mult.reg_1)
@@ -403,7 +319,7 @@ mult.reg_1 = lm(log_los ~ bmi + o2sat + heartrate + bpsystolic + bpdiastolic + r
 stepwise_1 <- step(mult.reg_1, direction = 'both')
 summary(stepwise_1)
 ```
-criterion
+2. criterion based selection
 ```{r}
 best <- function(model, ...) 
 {
@@ -426,5 +342,46 @@ abline(0,1)
 
 plot(1:18, best_subsets_1[, "adjr2"], xlab="No. of predictor", ylab="Adj R2")
 ```
+criterion based model with clean data set.
+```{r}
+criterion_based_model_1 = lm(log_los ~ bmi + o2sat + heartrate + bpsystolic + bpdiastolic + respirationrate + temperature + is30dayreadmit + cindex + evisit + ageyear + gender + race + religion + maritalstatus + insurancetype, data = GHP_missing_to_median_clean)
+  summary(criterion_based_model_1)
+```
+
+Anova test with partial F test to compare the two models
+```{r}
+anova(stepwise_1, criterion_based_model_1)
+```
+This anova test suggest that the Crierion based model is not superior.
+So, with the "stepwise_1", I tried to remove its nonsignificant predictors,
+```{r}
+stepwise_1_reduced = update(stepwise_1, . ~ . -maritalstatus)
+stepwise_1_reduced = update(stepwise_1_reduced, . ~ . -o2sat)
+summary(stepwise_1_reduced)
+```
+Still use Anova to compare the reduced model with the bigger model.
+```{r}
+anova(stepwise_1_reduced, stepwise_1)
+```
+The result suggest that the bigger model is not superior, so we used the smaller model as our final model.
+```{r}
+final_model_clean = stepwise_1_reduced
+pander(broom::tidy(summary(final_model_clean)))
+write_csv(broom::tidy(summary(final_model_clean)), "estimates.csv")
+```
+
+The diagnostics of this new final model
+```{r}
+par(mfrow = c(2, 2))
+plot(stepwise_1_reduced)
+```
+
+Check for collinearity
+```{r}
+pander(vif(final_model_clean))
+```
+
+
+
 
 ### 5. Model validation
