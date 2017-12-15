@@ -163,7 +163,7 @@ ggpairs(GHP_missing_to_median) + ggplot2::theme_bw()
 
 ### 3. model building
 
-anova tests for categorical data: all categorical variable shows significant difference among their levels, except gender. However, I still include gender in the full model, because...?.
+anova tests for categorical data: all categorical variable shows significant difference among their levels, except gender. However, I still include gender in the full model, because ref...?.
 ```{r anova for each categorical data}
 slr_gender = lm(log_los ~ gender, data = GHP_missing_to_median)
 slr_maritalstatus = lm(log_los ~ maritalstatus, data = GHP_missing_to_median)
@@ -207,10 +207,22 @@ summary(auto_reduce1)
 auto_reduce2 <- update(auto_reduce1, . ~ . -o2sat)
 summary(auto_reduce2)
 ```
-6. Anova test for nested models
+6. reduced model, without o2sat
+```{r}
+auto_reduce3 <- update(stepwise, . ~ . -o2sat)
+summary(auto_reduce3)
+```
+
+7. Anova test for nested models
 ```{r}
 anova(auto_reduce1, stepwise)
 anova(auto_reduce2, stepwise)
+anova(auto_reduce3, stepwise) # show this
+```
+So it suggests that o2sat can be removed. Thus, the model from the auto method is :
+```{r}
+auto_model = auto_reduce3
+summary(auto_model)
 ```
 
 
@@ -219,7 +231,7 @@ criterion-based variable selection
 ```{r}
 best <- function(model, ...) 
 {
-  subsets <- regsubsets(formula(model), model.frame(model), nvmax = 13, ...)
+  subsets <- regsubsets(formula(model), model.frame(model), nvmax = 20, ...)
   subsets <- with(summary(subsets),
                   cbind(p = as.numeric(rownames(which)), which, rss, rsq, adjr2, cp, bic))
   
@@ -233,17 +245,41 @@ pander(best_subsets)
 par(mar=c(4,4,1,1))
 par(mfrow=c(1,2))
 
-plot(1:13, best_subsets[, "cp"], xlab="No. of predictor", ylab="Cp Statistic")
+plot(1:20, best_subsets[, "cp"], xlab="No. of predictor", ylab="Cp Statistic")
 abline(0,1)
 
-plot(1:13, best_subsets[, "adjr2"], xlab="No. of predictor", ylab="Adj R2")
+plot(1:20, best_subsets[, "adjr2"], xlab="No. of predictor", ylab="Adj R2")
 ```
 
-the selected model
+1. The criterion-based model is
 ```{r}
-crit = lm(log_los ~ heartrate + bpsystolic + bpdiastolic + respirationrate + temperature + is30dayreadmit + cindex + evisit + ageyear + gender + religion + maritalstatus + insurancetype, data = GHP_missing_to_median)
+crit = lm(log_los ~ o2sat + heartrate + bpsystolic + bpdiastolic + respirationrate + temperature + is30dayreadmit + cindex + evisit + ageyear + gender + religion + maritalstatus + insurancetype, data = GHP_missing_to_median)
   summary(crit)
 ```
+2. reduced model without o2sat
+```{r}
+crit_reduce1 = update(crit, . ~ . -o2sat)
+summary(crit_reduce1)
+```
+
+3. reduced model without religion
+```{r}
+crit_reduce2 = update(crit, . ~ . -religion)
+summary(crit_reduce2)
+```
+
+4. reduced model without maritalstatus
+```{r}
+crit_reduce3 = update(crit, . ~ . -maritalstatus)
+summary(crit_reduce3)
+```
+
+Anova
+```{r}
+anova(crit_reduce1, crit)
+```
+
+
 
 #check collinearity
 ```{r}
