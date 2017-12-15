@@ -1,10 +1,7 @@
 ---
-title: "bmi_final"
-author: "Qianshu Wang"
-date: "2017/12/9"
+title: "Appendix: Code for the final project"
 output:
   pdf_document: default
-  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -26,6 +23,7 @@ library(faraway)
 library(leaps)
 library(HH)
 library(broom)
+library(boot)
 library(GGally)
 library(olsrr)
 ```
@@ -381,7 +379,37 @@ Check for collinearity
 pander(vif(final_model_clean))
 ```
 
+### 6. Model validation
+Use bootstrap to validate the model.
+```{r}
+# Bootstrap to assess the variability of model estimates#
+set.seed(1)
+
+# Our usual regression, no bootstrap yet
+boot.fn <- function(data, index){
+	return(coef(lm(log_los ~ heartrate + bpsystolic + bpdiastolic + respirationrate + temperature + is30dayreadmit + cindex + evisit + ageyear + gender + insurancetype, data=data,subset=index)))
+}
+
+# Compute the estimates by sampling with replacement
+# Sample chooses 3600 observations from 3600, with replacement
+# Might have duplicates
+set.seed(1)
+
+# One draw
+boot.fn(GHP_missing_to_median_clean,sample(3600,3600,replace=T))
+
+# Use function boot() to repeat the sampling 1000 times.
+boot = boot(GHP_missing_to_median_clean, boot.fn, 1000)
+boot_data = data.frame((boot))
+boot_data = t(boot_data)
+boot_data = data.frame(boot_data)
+write_csv(boot_data, "boot.csv")
+```
+
+The bootstrap results and the final model have similar coefficients and therefore justified the consistency of our model.
 
 
 
-### 5. Model validation
+
+
+
